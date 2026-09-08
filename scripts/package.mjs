@@ -35,6 +35,15 @@ target platform instead.`);
   process.exit(1);
 }
 
+// Same reasoning for the architecture: Electron would be downloaded for the
+// target, but the node-pty binary next to it is whatever was compiled here.
+if (arch !== process.arch) {
+  console.error(`Refusing to build for ${arch} on ${process.arch}: the bundled node-pty is
+compiled for this machine's architecture and would not load. Build on a
+${arch} machine instead.`);
+  process.exit(1);
+}
+
 // Everything that is not part of the running app: build inputs, tests, and the
 // prebuilt binaries node-pty ships for other platforms. Those last ones are the
 // bulk of it — roughly 60MB of Windows ConPTY that also breaks macOS signing.

@@ -40,7 +40,6 @@ Download a build from [Releases](../../releases):
 | Download | Platform |
 | --- | --- |
 | `Basalt-darwin-arm64.zip` | macOS, Apple silicon |
-| `Basalt-darwin-x64.zip` | macOS, Intel |
 | `Basalt-linux-x64.tar.gz` | Linux, x64 |
 | `Basalt-win32-x64.zip` | Windows, x64 |
 

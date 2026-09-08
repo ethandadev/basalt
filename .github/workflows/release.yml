@@ -20,16 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # GitHub has retired its Intel macOS runners, and an x64 build cannot
+          # be made on an arm64 one: node-pty is compiled for the host, so the
+          # result would carry the wrong architecture's binary.
           - os: macos-latest
             label: macOS (Apple silicon)
             target: --mac
             arch: arm64
             package: Basalt-darwin-arm64
-          - os: macos-13
-            label: macOS (Intel)
-            target: --mac
-            arch: x64
-            package: Basalt-darwin-x64
           - os: ubuntu-latest
             label: Linux (x64)
             target: --linux
@@ -144,7 +142,6 @@ jobs:
           | Download | Platform |
           | --- | --- |
           | `Basalt-darwin-arm64.zip` | macOS, Apple silicon |
-          | `Basalt-darwin-x64.zip` | macOS, Intel |
           | `Basalt-linux-x64.tar.gz` | Linux, x64 |
           | `Basalt-win32-x64.zip` | Windows, x64 |
 
