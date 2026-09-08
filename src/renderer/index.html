@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;" />
+  <title>Basalt</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="titlebar" id="titlebar">
+    <div class="traffic-space"></div>
+
+    <div class="tabs" id="tabs" role="tablist" aria-label="Terminal tabs"></div>
+
+    <button class="tab-add" id="new-tab" title="New tab (⌘T)" aria-label="New tab">+</button>
+
+    <div class="titlebar-spacer"></div>
+
+    <div class="shell-picker">
+      <button class="shell-button" id="shell-button" aria-haspopup="listbox" aria-expanded="false">
+        <span class="shell-dot" id="shell-dot"></span>
+        <span id="shell-label">zsh</span>
+        <span class="chev">⌄</span>
+      </button>
+      <div class="popover" id="shell-menu" role="listbox" hidden></div>
+    </div>
+
+    <div class="ssh-picker">
+      <button class="shell-button" id="connect-button" aria-haspopup="listbox" aria-expanded="false"
+              title="Connect to a host over SSH">
+        <span class="ssh-label">ssh</span>
+        <span class="chev">⌄</span>
+      </button>
+      <div class="popover" id="connect-menu" role="listbox" hidden></div>
+    </div>
+
+    <button class="icon-button" id="files-button" title="Remote files" aria-label="Remote files">⇅</button>
+    <button class="icon-button" id="blocks-button" title="Command list (⌘⇧O)" aria-label="Command list">☰</button>
+    <button class="icon-button" id="appearance-button" title="Appearance" aria-label="Light or dark appearance">◐</button>
+    <button class="icon-button" id="settings-button" title="Settings (⌘,)" aria-label="Settings">⚙</button>
+  </div>
+
+  <div class="body">
+    <main class="stack" id="stack"></main>
+
+    <aside class="panel blocks-panel" id="blocks-panel" hidden>
+      <header class="panel-head">
+        <span>Commands</span>
+        <div class="panel-actions">
+          <button class="mini" id="fold-all">Fold all</button>
+          <button class="mini" id="expand-all">Expand all</button>
+          <button class="icon-button" id="blocks-close" aria-label="Close">✕</button>
+        </div>
+      </header>
+      <div class="block-list" id="block-list"></div>
+    </aside>
+
+    <aside class="panel files-panel" id="files-panel" hidden>
+      <header class="panel-head">
+        <span>Remote files</span>
+        <div class="panel-actions">
+          <button class="mini" id="files-upload" title="Upload files here">Upload</button>
+          <button class="mini" id="files-mkdir" title="Create a folder here">New</button>
+          <button class="icon-button" id="files-close" aria-label="Close">✕</button>
+        </div>
+      </header>
+      <div class="files-bar">
+        <select id="files-host" aria-label="Host"></select>
+        <button class="mini" id="files-refresh" title="Refresh">⟳</button>
+      </div>
+      <div class="files-path" id="files-path" hidden></div>
+      <div class="files-status" id="files-status" hidden></div>
+      <div class="file-list" id="file-list"></div>
+    </aside>
+  </div>
+
+  <div class="findbar" id="findbar" hidden>
+    <input type="text" id="find-input" placeholder="Find in terminal" spellcheck="false" autocomplete="off" />
+    <button class="mini" id="find-prev" title="Previous (⌘⇧G)">↑</button>
+    <button class="mini" id="find-next" title="Next (⌘G)">↓</button>
+    <button class="mini" id="find-close" title="Close (esc)">✕</button>
+  </div>
+
+  <footer class="statusbar" id="statusbar">
+    <span id="status-cwd" class="status-cwd"></span>
+    <span class="status-gap"></span>
+    <span id="status-hint" class="status-hint"></span>
+    <span id="status-shell" class="status-shell"></span>
+  </footer>
+
+  <div class="overlay" id="overlay" hidden></div>
+
+  <section class="sheet settings-sheet" id="settings-sheet" hidden aria-label="Settings">
+    <header class="sheet-head">
+      <h2>Settings</h2>
+      <button class="icon-button" id="settings-close" aria-label="Close">✕</button>
+    </header>
+    <nav class="sheet-tabs" id="settings-tabs"></nav>
+    <div class="sheet-body" id="settings-body"></div>
+    <footer class="sheet-foot">
+      <button class="mini danger" id="settings-reset">Reset to defaults</button>
+      <span class="sheet-note" id="settings-path"></span>
+    </footer>
+  </section>
+
+  <section class="sheet help-sheet" id="help-sheet" hidden aria-label="Keyboard shortcuts">
+    <header class="sheet-head">
+      <h2>Keyboard shortcuts</h2>
+      <button class="icon-button" id="help-close" aria-label="Close">✕</button>
+    </header>
+    <div class="sheet-body" id="help-body"></div>
+  </section>
+
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
+  <script src="../../node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
+  <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script src="../../node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

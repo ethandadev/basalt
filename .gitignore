@@ -1,0 +1,12 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# The unpacked iconset is regenerated from build/icon.png; the compiled
+# icon.icns / icon.ico / icon.png are committed so a build needs no image tools.
+build/icon.iconset/
+
+# Local noise
+.DS_Store
+*.log
+npm-debug.log*

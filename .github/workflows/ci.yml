@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide what the others would have said.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Electron needs a display and a handful of system libraries to open a
+      # window, which the platform test does when it builds a real menu.
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libgbm1 libasound2t64 libxkbcommon0 libgtk-3-0
+
+      # postinstall rebuilds node-pty against this Electron, on this platform.
+      - run: npm ci
+
+      - name: Unit and platform tests
+        run: npm test
+        if: runner.os != 'Linux'
+
+      - name: Unit and platform tests (Linux)
+        run: xvfb-run -a npm test
+        if: runner.os == 'Linux'
+
+      # Drives real zsh, bash and PowerShell through a pty and checks the
+      # OSC 133 marks that block folding depends on actually come out. Needs a
+      # pty, so it does not run on Windows.
+      - name: Shell integration
+        if: runner.os != 'Windows'
+        run: npm run test:shells
+
+  end-to-end:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libgbm1 libasound2t64 libxkbcommon0 libgtk-3-0
+      - run: npm ci
+      # Drives the real app over the DevTools protocol, so it needs a display
+      # and a login shell with Basalt's integration in it.
+      - run: xvfb-run -a npm run test:e2e

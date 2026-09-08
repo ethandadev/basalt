@@ -1,0 +1,159 @@
+name: Release
+
+# Tagging is what publishes: push a v-tag and the three platform builds are
+# made on their own runners and attached to a GitHub release. Running it by
+# hand produces the same artifacts as a draft, for checking a build without
+# committing to a version.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS (Apple silicon)
+            target: --mac
+            arch: arm64
+            package: Basalt-darwin-arm64
+          - os: macos-13
+            label: macOS (Intel)
+            target: --mac
+            arch: x64
+            package: Basalt-darwin-x64
+          - os: ubuntu-latest
+            label: Linux (x64)
+            target: --linux
+            arch: x64
+            package: Basalt-linux-x64
+          - os: windows-latest
+            label: Windows (x64)
+            target: --win
+            arch: x64
+            package: Basalt-win32-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libgbm1 libasound2t64 libxkbcommon0 libgtk-3-0
+
+      # node-pty is native: this compiles it against this Electron on this
+      # platform, which is why each build has to run on its own runner.
+      - run: npm ci
+
+      - name: Test
+        if: runner.os != 'Linux'
+        run: npm test
+
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm test
+
+      - name: Package
+        run: node scripts/package.mjs ${{ matrix.target }} --arch=${{ matrix.arch }}
+
+      # ditto rather than zip on macOS: it is the only archiver that preserves
+      # the bundle's symlinks and extended attributes, and therefore any
+      # signature the app carries.
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist/${{ matrix.package }}
+          ditto -c -k --keepParent --sequesterRsrc Basalt.app \
+            "$GITHUB_WORKSPACE/${{ matrix.package }}.zip"
+
+      - name: Archive (Linux)
+        if: runner.os == 'Linux'
+        run: tar -C dist -czf "${{ matrix.package }}.tar.gz" "${{ matrix.package }}"
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/${{ matrix.package }}/*" -DestinationPath "${{ matrix.package }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: |
+            ${{ matrix.package }}.zip
+            ${{ matrix.package }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List what will be attached
+        run: ls -lh artifacts
+
+      # A tag publishes; a manual run leaves a draft so a build can be checked
+      # without committing to a version.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            DRAFT=""
+          else
+            TAG="build-$(date +%Y%m%d-%H%M%S)"
+            DRAFT="--draft"
+          fi
+
+          NOTES=$(cat <<'EOF'
+          Basalt — a terminal for macOS, Linux and Windows.
+
+          | Download | Platform |
+          | --- | --- |
+          | `Basalt-darwin-arm64.zip` | macOS, Apple silicon |
+          | `Basalt-darwin-x64.zip` | macOS, Intel |
+          | `Basalt-linux-x64.tar.gz` | Linux, x64 |
+          | `Basalt-win32-x64.zip` | Windows, x64 |
+
+          These builds are **not code signed**. macOS will refuse to open the app
+          until you remove the quarantine attribute:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/Basalt.app
+          ```
+
+          Windows SmartScreen will warn on first run — choose *More info* then
+          *Run anyway*. To produce a signed macOS build yourself, see
+          `npm run sign` and `npm run notarize` in the README.
+          EOF
+          )
+
+          gh release create "$TAG" \
+            --title "Basalt $TAG" \
+            --notes "$NOTES" \
+            $DRAFT \
+            artifacts/*

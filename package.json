@@ -1,0 +1,37 @@
+{
+  "name": "basalt",
+  "productName": "Basalt",
+  "version": "1.0.0",
+  "description": "A simple, fast terminal for macOS and Linux with visual completions, block folding, easy shell switching, and built-in SSH and remote file transfer.",
+  "main": "src/main/main.js",
+  "author": "Ethan W",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "test": "node test/blocks.test.mjs && node test/completions.test.mjs && node test/ssh.test.mjs && node test/ssh-ops.test.mjs && electron test/platform.test.cjs",
+    "test:shells": "python3 test/integration.py",
+    "test:e2e": "node test/e2e.mjs",
+    "package": "node scripts/package.mjs",
+    "sign": "node scripts/sign.mjs",
+    "notarize": "node scripts/notarize.mjs",
+    "install-app": "npm run package && npm run sign && rm -rf /Applications/Basalt.app && ditto dist/Basalt-darwin-arm64/Basalt.app /Applications/Basalt.app",
+    "install-linux": "node scripts/install-linux.mjs"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/addon-unicode11": "^0.8.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/addon-webgl": "^0.18.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "@electron/rebuild": "^3.7.0",
+    "electron": "^38.0.0"
+  }
+}

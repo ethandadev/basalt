@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Basalt
+GenericName=Terminal
+Comment=A simple, fast terminal with visual completions, block folding, and easy shell switching
+Categories=System;TerminalEmulator;Utility;
+Keywords=shell;prompt;command;commandline;cmd;console;
+Terminal=false
+StartupNotify=true
+StartupWMClass=Basalt
+
+# Both lines are rewritten by the install step below: Exec must be the absolute
+# path to the unpacked binary, and Icon the absolute path to the PNG (a bare
+# name only works for icons installed into an icon theme directory).
+Exec=/opt/basalt/Basalt %U
+Icon=/opt/basalt/resources/app/build/icon.png
