@@ -35,7 +35,7 @@ jobs:
             target: --linux
             arch: x64
             package: Basalt-linux-x64
-          - os: windows-latest
+          - os: windows-2022
             label: Windows (x64)
             target: --win
             arch: x64
@@ -59,6 +59,15 @@ jobs:
       # node-pty is native: this compiles it against this Electron on this
       # platform, which is why each build has to run on its own runner.
       - run: npm ci
+
+      # Electron's SUID sandbox helper must be root-owned and setuid. On a CI
+      # runner it is neither, and Electron refuses to start rather than run
+      # unsandboxed — which takes out every test that opens a window.
+      - name: Fix Electron's sandbox helper
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 
       - name: Test
         if: runner.os != 'Linux'
