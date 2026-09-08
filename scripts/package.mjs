@@ -64,10 +64,15 @@ if (platform !== 'darwin') {
 // conpty.dll are launched at run time, so on that platform they are the one
 // part of third_party that must ship. Everywhere else they are dead weight
 // that also breaks macOS signing.
+//
+// The prebuilds stay excluded on Windows too — node-pty looks in build/Release
+// first, and that is what the rebuild just produced — as do MSVC's build
+// intermediates, which use a different directory name from the POSIX ones and
+// were adding some 50MB to the archive.
 if (platform === 'win32') {
   ignore.splice(ignore.indexOf('^/node_modules/node-pty/third_party'), 1);
-  ignore[ignore.indexOf('^/node_modules/node-pty/prebuilds')] =
-    '^/node_modules/node-pty/prebuilds/(darwin|linux)-';
+  ignore.push('^/node_modules/node-pty/build/Release/obj/');
+  ignore.push('^/node_modules/node-pty/build/.*\\.(pdb|ilk|exp|lib|recipe|tlog)$');
 }
 
 const options = {
