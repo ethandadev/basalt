@@ -107,7 +107,14 @@ def run_shell(argv, env, commands, timeout=30, warmup=0.6, gap=1.0):
             settled = signal_at is not None and time.time() - signal_at >= gap
             stalled = time.time() - start > stall_after + sent * gap
             if settled or stalled:
-                os.write(fd, pending.pop(0).encode())
+                # A fresh shell can still swallow the very first keystroke
+                # after its editor comes up, however long the wait — the
+                # leading "e" of echo disappears and the shell reports
+                # "command not found: cho". A leading space costs nothing in
+                # any of these shells, so if a character is eaten it is that
+                # one. What is under test here is the marks, not the pty's
+                # input timing.
+                os.write(fd, (" " + pending.pop(0)).encode())
                 sent += 1
                 signal_at = None
                 last_signals = None
@@ -280,7 +287,9 @@ def check_rc_is_sourced(integration_dir, home):
 
 
 def main():
-    with tempfile.TemporaryDirectory() as base:
+    # The shells write into the integration directory as they exit (zsh drops a
+    # .zcompdump), which can race the cleanup and raise "directory not empty".
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as base:
         home = os.path.join(base, "home")
         os.makedirs(home)
         integration_dir = generate_integration(base)

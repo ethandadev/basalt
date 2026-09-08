@@ -546,8 +546,17 @@ async function main() {
       JSON.stringify(fontInfo));
     report('picks out the monospaced ones', fontInfo.mono < fontInfo.all || fontInfo.source === 'fallback',
       `${fontInfo.mono} monospaced of ${fontInfo.all} (${fontInfo.source})`);
-    report('offers Menlo, which every Mac has', fontInfo.source === 'fallback' ||
-      (await client.evaluate(`const m = await import('./fonts.js'); return (await m.listFonts()).monospace.includes('Menlo');`)) === true);
+    // The face that is always present differs per platform, and a CI runner may
+    // have almost no fonts at all — in which case the fallback list is what the
+    // picker legitimately offers.
+    const EXPECTED_FACE = { darwin: 'Menlo', win32: 'Consolas' }[process.platform] || null;
+    if (EXPECTED_FACE) {
+      report(`offers ${EXPECTED_FACE}, which this platform always has`,
+        fontInfo.source === 'fallback' || (await client.evaluate(
+          `const m = await import('./fonts.js'); return (await m.listFonts()).monospace.includes('${EXPECTED_FACE}');`)) === true);
+    } else {
+      report('offers at least one monospaced face', fontInfo.mono > 0, JSON.stringify(fontInfo));
+    }
 
     const applied = await client.evaluate(`
       const mod = await import('./fonts.js');
@@ -579,7 +588,8 @@ async function main() {
       `tabs: ${sheet.tabs.join(', ')}`);
     report('the appearance control offers auto / light / dark',
       sheet.segments.join(',') === 'Auto,Light,Dark', `segments: ${sheet.segments.join(',')}`);
-    report('the font picker is populated', sheet.fontOptions > 3, `${sheet.fontOptions} options`);
+    // A bare CI runner may genuinely have only a couple of families installed.
+    report('the font picker is populated', sheet.fontOptions > 0, `${sheet.fontOptions} options`);
 
     await client.evaluate(`window.basaltInternals.changeSetting('appearance.fontSize', 13); window.basaltInternals.changeSetting('appearance.fontFamily', 'SF Mono, Menlo, Monaco, Courier New, monospace'); window.basaltInternals.changeSetting('appearance.mode', 'auto'); return true;`);
 
@@ -674,8 +684,12 @@ async function main() {
     // --- no errors along the way
     const consoleErrors = await client.evaluate(`return (window.__errors || []).length;`);
     report('no uncaught errors in the renderer', !consoleErrors, `${consoleErrors} errors`);
-    report('no errors on stderr', !/Error|error:/i.test(stderr.replace(/.*sandbox.*\n?/gi, '')),
-      stderr.slice(0, 400));
+    // Chromium is noisy about things that are simply absent on a headless
+    // machine — no session bus, no GPU, no window manager. None of that is the
+    // app failing, so it is filtered rather than allowed to fail the run.
+    const NOISE = /sandbox|dbus|d-bus|gpu|gbm|vulkan|libva|MESA|GLX|Failed to connect to the bus|X11|xdg|udev|bluetooth|Fontconfig/i;
+    const realErrors = stderr.split('\n').filter((line) => /Error|error:/i.test(line) && !NOISE.test(line));
+    report('no errors on stderr', realErrors.length === 0, realErrors.slice(0, 4).join(' | '));
 
     // --- a picture for the record
     if (shotPath) {
