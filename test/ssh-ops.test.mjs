@@ -15,6 +15,15 @@ async function check(name, fn) {
   catch (error) { console.error(`  FAIL  ${name}\n        ${error.message}`); process.exitCode = 1; }
 }
 
+// The stubs are shebang scripts standing in for ssh and scp, and they emulate
+// a POSIX remote shell. Windows can run neither, and what is under test here —
+// how a path is quoted for the far side — does not depend on the client's
+// platform, so this is skipped rather than reimplemented.
+if (process.platform === 'win32') {
+  console.log('  --  POSIX-only stubs, skipping on Windows\n\n0 checks passed');
+  process.exit(0);
+}
+
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'basalt-ops-'));
 const binDir = path.join(scratch, 'bin');
 const logFile = path.join(scratch, 'argv.log');

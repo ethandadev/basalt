@@ -253,16 +253,18 @@ def check_rc_is_sourced(integration_dir, home):
     env["BASALT_ORIG_ZDOTDIR"] = home
 
     out = run_shell([plan["file"]] + plan["args"], env,
-                    ["echo rc=$MY_OWN_RC_RAN\n", "echo zdotdir=[$ZDOTDIR]\n", "exit\n"])
+                    # Quoted: [...] is a glob in zsh, so an empty ZDOTDIR turns
+                    # the probe into an unmatched pattern and an error.
+                    ['echo "rc=$MY_OWN_RC_RAN"\n', 'echo "zdotdir=[$ZDOTDIR]"\n', "exit\n"])
     if out is None:
         print("  --  zsh is not installed here, skipping the startup-file checks")
         return
 
     report("zsh: still sources the user's own .zshrc", b"rc=yes" in out,
-           f"output tail: {out[-300:]!r}")
+           f"output tail: {out[-900:]!r}")
     report("zsh: hands ZDOTDIR back to the user's value",
            b"zdotdir=[]" in out or f"zdotdir=[{home}]".encode() in out,
-           f"output tail: {out[-300:]!r}")
+           f"output tail: {out[-900:]!r}")
 
 
 def main():

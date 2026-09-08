@@ -16,7 +16,10 @@ function check(name, fn) {
 }
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'basalt-ssh-test-'));
-process.env.HOME = scratch;                     // read by os.homedir() below
+// os.homedir() reads HOME on POSIX and USERPROFILE on Windows, so both have to
+// point at the scratch directory for the config parsing to be tested there.
+process.env.HOME = scratch;
+process.env.USERPROFILE = scratch;
 const ssh = (await import('../src/main/ssh.js')).default
   || (await import('../src/main/ssh.js'));
 
@@ -94,6 +97,14 @@ fs.writeFileSync(path.join(remote, "quote'name"), 'x');
 fs.writeFileSync(path.join(remote, '-leading-dash'), 'xy');
 fs.writeFileSync(path.join(remote, '.dotfile'), 'z');
 
+// The listing snippet runs on the *remote* host, which is POSIX whatever the
+// client is. Without a local POSIX shell there is nothing here to run it
+// against, so those checks are skipped rather than faked.
+const HAS_POSIX_SH = (() => {
+  try { execFileSync('sh', ['-c', 'true'], { stdio: 'ignore' }); return true; }
+  catch (_) { return false; }
+})();
+
 function runListing(dir) {
   const out = execFileSync('sh', ['-s', '--', dir], { input: ssh.LIST_SCRIPT, encoding: 'utf8' });
   const lines = out.split('\n');
@@ -106,52 +117,55 @@ function runListing(dir) {
   return { cwd, entries };
 }
 
-const listed = runListing(remote);
+const listed = HAS_POSIX_SH ? runListing(remote) : { cwd: '', entries: [] };
 const byName = Object.fromEntries(listed.entries.map((e) => [e.name, e]));
+if (!HAS_POSIX_SH) {
+  console.log('  --  no POSIX shell here, skipping the remote-listing checks');
+}
 
-check('reports the directory it actually landed in', () => {
+if (HAS_POSIX_SH) check('reports the directory it actually landed in', () => {
   assert.equal(fs.realpathSync(listed.cwd), fs.realpathSync(remote));
 });
 
-check('lists a filename containing spaces as one entry', () => {
+if (HAS_POSIX_SH) check('lists a filename containing spaces as one entry', () => {
   assert.ok(byName['name with spaces.log'], `got: ${Object.keys(byName).join(' | ')}`);
   assert.equal(byName['name with spaces.log'].size, 10);
 });
 
-check('survives a filename containing a quote', () => {
+if (HAS_POSIX_SH) check('survives a filename containing a quote', () => {
   assert.ok(byName["quote'name"], `got: ${Object.keys(byName).join(' | ')}`);
 });
 
-check('does not treat a leading dash as an option', () => {
+if (HAS_POSIX_SH) check('does not treat a leading dash as an option', () => {
   assert.ok(byName['-leading-dash'], `got: ${Object.keys(byName).join(' | ')}`);
   assert.equal(byName['-leading-dash'].size, 2);
 });
 
-check('marks directories apart from files', () => {
+if (HAS_POSIX_SH) check('marks directories apart from files', () => {
   assert.equal(byName['a directory'].type, 'd');
   assert.equal(byName['plain.txt'].type, 'f');
 });
 
-check('includes dotfiles', () => {
+if (HAS_POSIX_SH) check('includes dotfiles', () => {
   assert.ok(byName['.dotfile'] && byName['.hidden-dir']);
 });
 
-check('never emits . or ..', () => {
+if (HAS_POSIX_SH) check('never emits . or ..', () => {
   assert.ok(!byName['.'] && !byName['..'], `got: ${Object.keys(byName).join(' | ')}`);
 });
 
-check('reports real sizes', () => {
+if (HAS_POSIX_SH) check('reports real sizes', () => {
   assert.equal(byName['plain.txt'].size, 5);
 });
 
 const emptyDir = path.join(scratch, 'empty');
 fs.mkdirSync(emptyDir, { recursive: true });
-check('an empty directory lists as empty rather than inventing entries', () => {
+if (HAS_POSIX_SH) check('an empty directory lists as empty rather than inventing entries', () => {
   const result = runListing(emptyDir);
   assert.equal(result.entries.length, 0, `got: ${JSON.stringify(result.entries)}`);
 });
 
-check('a missing directory is reported, not silently empty', () => {
+if (HAS_POSIX_SH) check('a missing directory is reported, not silently empty', () => {
   let out = '';
   try {
     out = execFileSync('sh', ['-s', '--', path.join(scratch, 'nope')],
