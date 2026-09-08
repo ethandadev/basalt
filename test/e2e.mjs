@@ -311,9 +311,14 @@ async function main() {
     // the next command is typed — otherwise it lands on the tail of the old one
     // and runs something else entirely, which on a slow machine is exactly what
     // happens.
+    // Kill the line, then submit it: if the kill did not fully land, Enter runs
+    // whatever is left over harmlessly and either way the next command starts
+    // from a fresh prompt. Waiting on the kill alone is a race a slow machine
+    // loses, and the next command then runs concatenated onto this one.
     await client.evaluate(`${SESSION}.write('\\u0015'); return true;`);
-    await until(client, `${SESSION}.readFullInput().trim() === ''`, 10000,
-      'the input line to clear');
+    await pressKey(client, 'Enter');
+    await until(client, `${SESSION}.inputStart !== null && ${SESSION}.readFullInput().trim() === ''`,
+      15000, 'a clean prompt before the next command');
 
     // --- 4. folding long output
     await client.evaluate(`${S}.raw.blocks.truncateThreshold = 10; ${SESSION}.settings.blocks.truncateThreshold = 10; ${SESSION}.model.options.truncateThreshold = 10; return true;`);

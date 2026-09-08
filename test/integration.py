@@ -45,7 +45,7 @@ def generate_integration(base):
     return out[0]
 
 
-def run_shell(argv, env, commands, timeout=20, warmup=0.6, gap=0.6):
+def run_shell(argv, env, commands, timeout=30, warmup=0.6, gap=1.0):
     """Drive a shell in a pty and return everything it wrote.
 
     Commands are paced on the shell rather than on a clock: the next one is
@@ -69,7 +69,8 @@ def run_shell(argv, env, commands, timeout=20, warmup=0.6, gap=0.6):
     sent = 0
     start = time.time()
     earliest = start + warmup
-    prompt_at = None
+    signal_at = None
+    last_signals = None
     # If the shell emits no marks at all, fall back to sending on a timer so an
     # unintegrated shell still gets driven.
     stall_after = warmup + gap * 4
@@ -86,23 +87,30 @@ def run_shell(argv, env, commands, timeout=20, warmup=0.6, gap=0.6):
             output += chunk
 
         if pending and time.time() >= earliest:
+            # The prompt mark is emitted before the line editor is ready to
+            # take input, and a character typed in that window is silently
+            # eaten — which reads as a broken integration ("command not found:
+            # cho", the leading e of echo having disappeared). zsh, readline
+            # and PSReadLine all turn on bracketed paste as they begin reading,
+            # so that is the later, better signal.
             prompts = output.count(b"\x1b]133;A")
-            if prompts > sent and prompt_at is None:
-                prompt_at = time.time()
-
-            # The prompt mark is emitted before the line editor is ready to take
-            # input, and a character typed in that window is silently eaten —
-            # which reads as a broken integration ("command not found: cho").
-            # zsh, readline and PSReadLine all turn on bracketed paste as they
-            # start reading, so that sequence is the real "ready" signal.
             editors = output.count(b"\x1b[?2004h")
-            ready = editors > sent
-            settled = prompt_at is not None and time.time() - prompt_at >= gap
+            signals = (prompts > sent, editors > sent)
+
+            # Restart the wait whenever a new signal arrives, so it is measured
+            # from the last one rather than the first: the editor coming up
+            # after the prompt mark is exactly the case that matters.
+            if signals != last_signals:
+                last_signals = signals
+                signal_at = time.time() if any(signals) else None
+
+            settled = signal_at is not None and time.time() - signal_at >= gap
             stalled = time.time() - start > stall_after + sent * gap
-            if ready or settled or stalled:
+            if settled or stalled:
                 os.write(fd, pending.pop(0).encode())
                 sent += 1
-                prompt_at = None
+                signal_at = None
+                last_signals = None
                 earliest = time.time() + 0.15
 
         if not pending and output.count(b"\x1b]133;D") >= len(commands) - 1:
