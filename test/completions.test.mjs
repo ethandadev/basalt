@@ -16,6 +16,13 @@ fs.writeFileSync(path.join(root, 'notes-old.txt'), 'x');
 fs.writeFileSync(path.join(root, '.hidden'), 'x');
 fs.writeFileSync(path.join(root, 'my file.txt'), 'x');
 
+// Directory separators and quoting are the shell's conventions, not ours:
+// Windows offers "reports\\" and quotes a space rather than backslash-escaping
+// it, because there a backslash *is* the separator.
+const IS_WIN = process.platform === 'win32';
+const SEP = IS_WIN ? '\\' : '/';
+const spaced = (name) => (IS_WIN ? `'${name}'` : name.replace(/ /g, '\\ '));
+
 let passed = 0;
 async function check(name, fn) {
   try { await fn(); console.log(`  ok  ${name}`); passed++; }
@@ -36,13 +43,13 @@ await check('offers the shared prefix of the matches', async () => {
   const result = await at('cat re');
   assert.equal(result.commonPrefix, 're');
   const result2 = await at('cat rep');
-  assert.equal(result2.commonPrefix, 'reports/');
+  assert.equal(result2.commonPrefix, `reports${SEP}`);
 });
 
 await check('marks directories with a trailing slash', async () => {
   const result = await at('cat rep');
   assert.equal(result.candidates[0].type, 'directory');
-  assert.equal(result.candidates[0].display, 'reports/');
+  assert.equal(result.candidates[0].display, `reports${SEP}`);
 });
 
 await check('cd only offers directories', async () => {
@@ -58,11 +65,11 @@ await check('hides dotfiles until a dot is typed', async () => {
   assert.ok(dotted.candidates.some((c) => c.display === '.hidden'));
 });
 
-await check('escapes a space in a filename', async () => {
+await check('quotes or escapes a space in a filename, as the shell expects', async () => {
   const result = await at('cat my');
   const match = result.candidates.find((c) => c.display === 'my file.txt');
   assert.ok(match, 'found the file');
-  assert.equal(match.value, 'my\\ file.txt');
+  assert.equal(match.value, spaced('my file.txt'));
 });
 
 await check('completes commands in command position', async () => {

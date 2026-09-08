@@ -45,24 +45,36 @@ def generate_integration(base):
     return out[0]
 
 
-def run_shell(argv, env, commands, timeout=12, warmup=0.6, gap=0.6):
-    """Drive a shell in a pty and return everything it wrote."""
+def run_shell(argv, env, commands, timeout=20, warmup=0.6, gap=0.6):
+    """Drive a shell in a pty and return everything it wrote.
+
+    Commands are paced on the shell rather than on a clock: the next one is
+    typed once the prompt mark for the previous one has come back. A fixed
+    delay works on a developer's machine and then sends three commands into a
+    half-drawn prompt on a loaded CI runner, which looks like a broken
+    integration rather than a slow one.
+    """
+    if not os.path.exists(argv[0]):
+        return None
+
     pid, fd = pty.fork()
     if pid == 0:
         os.environ.clear()
         os.environ.update(env)
         os.execv(argv[0], argv)
 
+    import time
     output = bytearray()
     pending = list(commands)
-    deadline = timeout
-
-    # Give the shell a moment to draw its first prompt before typing.
-    import time
+    sent = 0
     start = time.time()
-    next_send = start + warmup
+    earliest = start + warmup
+    prompt_at = None
+    # If the shell emits no marks at all, fall back to sending on a timer so an
+    # unintegrated shell still gets driven.
+    stall_after = warmup + gap * 4
 
-    while time.time() - start < deadline:
+    while time.time() - start < timeout:
         ready, _, _ = select.select([fd], [], [], 0.2)
         if ready:
             try:
@@ -72,12 +84,26 @@ def run_shell(argv, env, commands, timeout=12, warmup=0.6, gap=0.6):
             if not chunk:
                 break
             output += chunk
-        if pending and time.time() >= next_send:
-            os.write(fd, pending.pop(0).encode())
-            next_send = time.time() + gap
-        if not pending and b"\x1b]133;D" in output and output.count(b"\x1b]133;D") >= len(commands) - 1:
-            # Everything we asked for has finished; drain briefly and stop.
-            if time.time() - start > 1.5:
+
+        if pending and time.time() >= earliest:
+            prompts = output.count(b"\x1b]133;A")
+            if prompts > sent and prompt_at is None:
+                prompt_at = time.time()
+            # The prompt mark is emitted before the line editor is ready to take
+            # input — PSReadLine in particular still has to install its key
+            # handlers — so let it settle rather than typing into a prompt that
+            # will drop or reorder the characters.
+            settled = prompt_at is not None and time.time() - prompt_at >= gap
+            stalled = time.time() - start > stall_after + sent * gap
+            if settled or stalled:
+                os.write(fd, pending.pop(0).encode())
+                sent += 1
+                prompt_at = None
+                earliest = time.time() + 0.15
+
+        if not pending and output.count(b"\x1b]133;D") >= len(commands) - 1:
+            # Everything asked for has finished; drain briefly and stop.
+            if time.time() - start > warmup + 0.5:
                 break
 
     try:
@@ -115,6 +141,9 @@ def check_shell(label, shell_path, integration_dir, home):
 
     out = run_shell([plan["file"]] + plan["args"], env,
                     ["echo hello-from-basalt\n", "false\n", "exit\n"])
+    if out is None:
+        print(f"  --  {label} is not installed here, skipping its checks")
+        return
 
     report(f"{label}: emits a prompt mark (OSC 133;A)", b"\x1b]133;A\x07" in out)
     report(f"{label}: emits a command-start mark (OSC 133;C)", b"\x1b]133;C\x07" in out)
@@ -178,8 +207,11 @@ def check_powershell(integration_dir, home):
     # `exit` ends the session. PowerShell needs a longer gap than a POSIX shell
     # to run a command and redraw its prompt.
     out = run_shell([plan["file"]] + plan["args"], env,
-                    ["& /usr/bin/false\r", "Write-Host (6*7)\r", "exit\r"],
-                    timeout=45, warmup=3.5, gap=2.5)
+                    ["& (Get-Command false).Source\r", "Write-Host (6*7)\r", "exit\r"],
+                    timeout=90, warmup=2.0, gap=1.5)
+    if out is None:
+        print("  --  PowerShell disappeared between the check and the run")
+        return
 
     report("pwsh: emits a prompt mark (OSC 133;A)", b"\x1b]133;A\x07" in out,
            f"tail: {out[-200:]!r}")
@@ -222,6 +254,9 @@ def check_rc_is_sourced(integration_dir, home):
 
     out = run_shell([plan["file"]] + plan["args"], env,
                     ["echo rc=$MY_OWN_RC_RAN\n", "echo zdotdir=[$ZDOTDIR]\n", "exit\n"])
+    if out is None:
+        print("  --  zsh is not installed here, skipping the startup-file checks")
+        return
 
     report("zsh: still sources the user's own .zshrc", b"rc=yes" in out,
            f"output tail: {out[-300:]!r}")

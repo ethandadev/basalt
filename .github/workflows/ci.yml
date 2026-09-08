@@ -32,6 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
             libcups2 libgbm1 libasound2t64 libxkbcommon0 libgtk-3-0
+          # zsh is one of the shells the integration test drives; the runner
+          # image does not carry it.
+          sudo apt-get install -y zsh
 
       # postinstall rebuilds node-pty against this Electron, on this platform.
       - run: npm ci

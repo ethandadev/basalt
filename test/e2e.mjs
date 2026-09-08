@@ -315,10 +315,12 @@ async function main() {
     await typeText(client, 'seq 1 60');
     await pressKey(client, 'Enter');
 
-    await until(client, `${SESSION}.model.foldable().some(b => b.outputLines >= 60)`, 10000, 'the long output');
+    // Generous rather than tight: on a loaded CI runner the shell can take
+    // several seconds to echo, run and report a command that is instant here.
+    await until(client, `${SESSION}.model.foldable().some(b => b.outputLines >= 60)`, 30000, 'the long output');
     report('captures a long output as one block', true);
 
-    const folded = await until(client, `${SESSION}.model.lastFoldable().fold !== 'full'`, 5000, 'the auto-fold');
+    const folded = await until(client, `${SESSION}.model.lastFoldable().fold !== 'full'`, 15000, 'the auto-fold');
     report('long output folds itself automatically', Boolean(folded));
 
     // The fold flag flips before the redraw finishes. Wait until this specific
