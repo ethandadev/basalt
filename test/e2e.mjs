@@ -307,8 +307,13 @@ async function main() {
     const replaced = await client.evaluate(`return ${SESSION}.readFullInput().trimEnd();`);
     report('typing over a selection replaces it', replaced === 'echo SIX TWO', `line is ${JSON.stringify(replaced)}`);
 
+    // Ctrl-U kills the line, but the shell has to echo the result back before
+    // the next command is typed — otherwise it lands on the tail of the old one
+    // and runs something else entirely, which on a slow machine is exactly what
+    // happens.
     await client.evaluate(`${SESSION}.write('\\u0015'); return true;`);
-    await sleep(200);
+    await until(client, `${SESSION}.readFullInput().trim() === ''`, 10000,
+      'the input line to clear');
 
     // --- 4. folding long output
     await client.evaluate(`${S}.raw.blocks.truncateThreshold = 10; ${SESSION}.settings.blocks.truncateThreshold = 10; ${SESSION}.model.options.truncateThreshold = 10; return true;`);

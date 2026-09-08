@@ -89,13 +89,17 @@ def run_shell(argv, env, commands, timeout=20, warmup=0.6, gap=0.6):
             prompts = output.count(b"\x1b]133;A")
             if prompts > sent and prompt_at is None:
                 prompt_at = time.time()
+
             # The prompt mark is emitted before the line editor is ready to take
-            # input — PSReadLine in particular still has to install its key
-            # handlers — so let it settle rather than typing into a prompt that
-            # will drop or reorder the characters.
+            # input, and a character typed in that window is silently eaten —
+            # which reads as a broken integration ("command not found: cho").
+            # zsh, readline and PSReadLine all turn on bracketed paste as they
+            # start reading, so that sequence is the real "ready" signal.
+            editors = output.count(b"\x1b[?2004h")
+            ready = editors > sent
             settled = prompt_at is not None and time.time() - prompt_at >= gap
             stalled = time.time() - start > stall_after + sent * gap
-            if settled or stalled:
+            if ready or settled or stalled:
                 os.write(fd, pending.pop(0).encode())
                 sent += 1
                 prompt_at = None
